@@ -741,6 +741,7 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/github-auth-url", s.mgmt.RequestGitHubToken)
 		mgmt.POST("/oauth-callback", s.mgmt.PostOAuthCallback)
 		mgmt.GET("/get-auth-status", s.mgmt.GetAuthStatus)
+		s.registerPlusManagementRoutes(mgmt)
 	}
 }
 
