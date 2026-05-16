@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -325,13 +326,13 @@ func (h *Handler) startKiroAuthCodeFlow(c *gin.Context, state, startURL, region 
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "callback server unavailable"})
 		return
 	}
-	forwarder, errForwarder := startCallbackForwarder(kiroAuthCodeCallbackPort, "kiro-authcode", targetURL)
+	forwarder, callbackPort, errForwarder := startKiroAuthCodeCallbackForwarder(kiroAuthCodeCallbackPort, targetURL)
 	if errForwarder != nil {
 		log.WithError(errForwarder).Error("failed to start kiro auth-code callback forwarder")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start callback server"})
 		return
 	}
-	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/oauth/callback", kiroAuthCodeCallbackPort)
+	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/oauth/callback", callbackPort)
 
 	codeVerifier, codeChallenge, errPKCE := generateKiroPKCE()
 	if errPKCE != nil {
@@ -368,7 +369,7 @@ func (h *Handler) startKiroAuthCodeFlow(c *gin.Context, state, startURL, region 
 	RegisterOAuthSession(state, "kiro")
 
 	go func() {
-		defer stopCallbackForwarderInstance(kiroAuthCodeCallbackPort, forwarder)
+		defer stopCallbackForwarderInstance(callbackPort, forwarder)
 
 		waitFile := filepath.Join(h.cfg.AuthDir, fmt.Sprintf(".oauth-kiro-%s.oauth", state))
 		deadline := time.Now().Add(10 * time.Minute)
@@ -448,6 +449,62 @@ func (h *Handler) startKiroAuthCodeFlow(c *gin.Context, state, startURL, region 
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "url": authURL, "state": state, "method": "auth_code"})
+}
+
+func startKiroAuthCodeCallbackForwarder(preferredPort int, targetBase string) (*callbackForwarder, int, error) {
+	if preferredPort <= 0 {
+		return nil, 0, fmt.Errorf("preferred callback port must be positive")
+	}
+
+	if forwarder, err := startCallbackForwarder(preferredPort, "kiro-authcode", targetBase); err == nil {
+		return forwarder, preferredPort, nil
+	}
+
+	ln, err := net.Listen("tcp", "0.0.0.0:0")
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to listen on fallback callback port: %w", err)
+	}
+	actualPort := ln.Addr().(*net.TCPAddr).Port
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := targetBase
+		if raw := r.URL.RawQuery; raw != "" {
+			if strings.Contains(target, "?") {
+				target += "&" + raw
+			} else {
+				target += "?" + raw
+			}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, r, target, http.StatusFound)
+	})
+
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      5 * time.Second,
+	}
+	done := make(chan struct{})
+
+	go func() {
+		if errServe := srv.Serve(ln); errServe != nil && errServe != http.ErrServerClosed {
+			log.WithError(errServe).Warn("kiro auth-code fallback callback forwarder stopped unexpectedly")
+		}
+		close(done)
+	}()
+
+	forwarder := &callbackForwarder{
+		provider: "kiro-authcode",
+		server:   srv,
+		done:     done,
+	}
+
+	callbackForwardersMu.Lock()
+	callbackForwarders[actualPort] = forwarder
+	callbackForwardersMu.Unlock()
+
+	log.Warnf("callback forwarder for kiro-authcode default port %d is busy, using fallback port %d", preferredPort, actualPort)
+	return forwarder, actualPort, nil
 }
 
 func (h *Handler) startKiroIDCDeviceFlow(c *gin.Context, state, startURL, region string) {
