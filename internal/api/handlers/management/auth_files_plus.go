@@ -3,7 +3,9 @@ package management
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -33,8 +35,13 @@ const (
 	codexDeviceVerificationURL          = "https://auth.openai.com/codex/device"
 	codexDeviceTokenExchangeRedirectURI = "https://auth.openai.com/deviceauth/callback"
 	codexDeviceTimeout                  = 15 * time.Minute
+	kiroPortalAuthBaseURL               = "https://app.kiro.dev"
+	kiroPortalTokenURL                  = "https://prod.us-east-1.auth.desktop.kiro.dev/oauth/token"
+	kiroPortalTimeout                   = 10 * time.Minute
 	kiroAuthCodeCallbackPort            = 19877
 )
+
+var kiroPortalCallbackPorts = []int{3128, 4649, 6588, 8008, 9091, 49153, 50153, 51153, 52153, 53153}
 
 type codexDeviceUserCodeRequest struct {
 	ClientID string `json:"client_id"`
@@ -56,6 +63,35 @@ type codexDeviceTokenResponse struct {
 	AuthorizationCode string `json:"authorization_code"`
 	CodeVerifier      string `json:"code_verifier"`
 	CodeChallenge     string `json:"code_challenge"`
+}
+
+type kiroPortalCallbackResult struct {
+	Path             string
+	LoginOption      string
+	Code             string
+	State            string
+	Error            string
+	ErrorDescription string
+}
+
+type kiroPortalTokenRequest struct {
+	Code         string `json:"code"`
+	CodeVerifier string `json:"code_verifier"`
+	RedirectURI  string `json:"redirect_uri"`
+}
+
+type kiroPortalTokenResponse struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+	ProfileArn   string `json:"profileArn"`
+	ExpiresIn    int    `json:"expiresIn"`
+}
+
+type kiroPortalCallbackServer struct {
+	port     int
+	server   *http.Server
+	listener net.Listener
+	done     chan struct{}
 }
 
 func (h *Handler) RequestCodexDeviceToken(c *gin.Context) {
@@ -282,6 +318,254 @@ func parseCodexDevicePollInterval(raw json.RawMessage) time.Duration {
 	}
 
 	return defaultInterval
+}
+
+func (h *Handler) RequestKiroPortalToken(c *gin.Context) {
+	state, errState := generateKiroPortalState()
+	if errState != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate state"})
+		return
+	}
+
+	codeVerifier, codeChallenge, errPKCE := generateKiroPKCE()
+	if errPKCE != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate pkce"})
+		return
+	}
+
+	server, redirectURI, callbacks, errServer := startKiroPortalCallbackServer(state, kiroPortalCallbackPorts)
+	if errServer != nil {
+		log.WithError(errServer).Error("failed to start kiro portal callback server")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start callback server"})
+		return
+	}
+
+	RegisterOAuthSession(state, "kiro")
+	authURL := buildKiroPortalURL(redirectURI, state, codeChallenge)
+	SetOAuthSessionError(state, "auth_url|"+authURL)
+
+	go func() {
+		defer server.Close()
+
+		select {
+		case callback := <-callbacks:
+			if callback.Error != "" {
+				SetOAuthSessionError(state, firstNonEmpty(callback.ErrorDescription, callback.Error))
+				return
+			}
+			if callback.State != state {
+				SetOAuthSessionError(state, "invalid state")
+				return
+			}
+			if callback.LoginOption != "google" && callback.LoginOption != "github" {
+				SetOAuthSessionError(state, "unsupported portal login option: "+callback.LoginOption)
+				return
+			}
+			if strings.TrimSpace(callback.Code) == "" {
+				SetOAuthSessionError(state, "missing authorization code")
+				return
+			}
+
+			fullRedirectURI := redirectURI + callback.Path + "?login_option=" + url.QueryEscape(callback.LoginOption)
+			tokenResp, errToken := exchangeKiroPortalSocialToken(context.Background(), h.portalHTTPClient(), kiroPortalTokenURL, callback.Code, codeVerifier, fullRedirectURI)
+			if errToken != nil {
+				log.WithError(errToken).Error("failed to exchange kiro portal authorization code")
+				SetOAuthSessionError(state, oauthSessionErrorWithCause("failed to exchange portal token", errToken))
+				return
+			}
+
+			provider := "Google"
+			if callback.LoginOption == "github" {
+				provider = "Github"
+			}
+			expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+			tokenData := &kiroauth.KiroTokenData{
+				AccessToken:  tokenResp.AccessToken,
+				RefreshToken: tokenResp.RefreshToken,
+				ProfileArn:   tokenResp.ProfileArn,
+				ExpiresAt:    expiresAt.Format(time.RFC3339),
+				AuthMethod:   "social",
+				Provider:     provider,
+			}
+
+			savedPath, errSave := h.saveKiroTokenDataRecord(context.Background(), tokenData)
+			if errSave != nil {
+				log.WithError(errSave).Error("failed to save kiro portal token")
+				SetOAuthSessionError(state, "failed to save portal token")
+				return
+			}
+
+			fmt.Printf("Kiro portal authentication successful! Token saved to %s\n", savedPath)
+			CompleteOAuthSession(state)
+			CompleteOAuthSessionsByProvider("kiro")
+		case <-time.After(kiroPortalTimeout):
+			SetOAuthSessionError(state, "Authorization timed out")
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+		"state":  state,
+		"method": "portal",
+		"url":    authURL,
+	})
+}
+
+func generateKiroPortalState() (string, error) {
+	b := make([]byte, 16)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func buildKiroPortalURL(redirectURI, state, codeChallenge string) string {
+	params := url.Values{}
+	params.Set("state", state)
+	params.Set("code_challenge", codeChallenge)
+	params.Set("code_challenge_method", "S256")
+	params.Set("redirect_uri", redirectURI)
+	params.Set("redirect_from", "KiroIDE")
+	return kiroPortalAuthBaseURL + "/signin?" + params.Encode()
+}
+
+func startKiroPortalCallbackServer(expectedState string, ports []int) (*kiroPortalCallbackServer, string, <-chan kiroPortalCallbackResult, error) {
+	var listener net.Listener
+	var errListen error
+	for _, port := range ports {
+		listener, errListen = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if errListen == nil {
+			break
+		}
+	}
+	if listener == nil {
+		return nil, "", nil, fmt.Errorf("failed to listen on portal callback ports: %w", errListen)
+	}
+
+	actualPort := listener.Addr().(*net.TCPAddr).Port
+	redirectURI := fmt.Sprintf("http://localhost:%d", actualPort)
+	results := make(chan kiroPortalCallbackResult, 1)
+
+	mux := http.NewServeMux()
+	handleCallback := func(w http.ResponseWriter, r *http.Request) {
+		result := kiroPortalCallbackResult{
+			Path:             r.URL.Path,
+			LoginOption:      strings.TrimSpace(r.URL.Query().Get("login_option")),
+			Code:             strings.TrimSpace(r.URL.Query().Get("code")),
+			State:            strings.TrimSpace(r.URL.Query().Get("state")),
+			Error:            strings.TrimSpace(r.URL.Query().Get("error")),
+			ErrorDescription: strings.TrimSpace(r.URL.Query().Get("error_description")),
+		}
+		if result.State != expectedState {
+			result.Error = "invalid_state"
+		}
+		select {
+		case results <- result:
+		default:
+		}
+		target := kiroPortalAuthBaseURL + "/signin?auth_status=success&redirect_from=KiroIDE"
+		if result.Error != "" {
+			target = kiroPortalAuthBaseURL + "/signin?auth_status=error&redirect_from=KiroIDE&error_message=" + url.QueryEscape(firstNonEmpty(result.ErrorDescription, result.Error))
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+	}
+	mux.HandleFunc("/oauth/callback", handleCallback)
+	mux.HandleFunc("/signin/callback", handleCallback)
+
+	srv := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	done := make(chan struct{})
+	go func() {
+		if errServe := srv.Serve(listener); errServe != nil && errServe != http.ErrServerClosed {
+			log.WithError(errServe).Warn("kiro portal callback server stopped unexpectedly")
+		}
+		close(done)
+	}()
+
+	return &kiroPortalCallbackServer{
+		port:     actualPort,
+		server:   srv,
+		listener: listener,
+		done:     done,
+	}, redirectURI, results, nil
+}
+
+func (s *kiroPortalCallbackServer) Close() {
+	if s == nil || s.server == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := s.server.Shutdown(ctx); err != nil && err != http.ErrServerClosed {
+		log.WithError(err).Warnf("failed to stop kiro portal callback server on port %d", s.port)
+	}
+	select {
+	case <-s.done:
+	case <-time.After(2 * time.Second):
+	}
+}
+
+func exchangeKiroPortalSocialToken(ctx context.Context, client *http.Client, endpoint, code, codeVerifier, redirectURI string) (*kiroPortalTokenResponse, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	payload, errMarshal := json.Marshal(kiroPortalTokenRequest{
+		Code:         code,
+		CodeVerifier: codeVerifier,
+		RedirectURI:  redirectURI,
+	})
+	if errMarshal != nil {
+		return nil, fmt.Errorf("failed to encode portal token request: %w", errMarshal)
+	}
+	req, errReq := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if errReq != nil {
+		return nil, fmt.Errorf("failed to build portal token request: %w", errReq)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	fp := kiroauth.GlobalFingerprintManager().GetFingerprint("portal")
+	req.Header.Set("User-Agent", fmt.Sprintf("KiroIDE-%s-%s", fp.KiroVersion, fp.KiroHash))
+
+	resp, errDo := client.Do(req)
+	if errDo != nil {
+		return nil, fmt.Errorf("portal token request failed: %w", errDo)
+	}
+	defer resp.Body.Close()
+
+	body, errRead := io.ReadAll(resp.Body)
+	if errRead != nil {
+		return nil, fmt.Errorf("failed to read portal token response: %w", errRead)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("portal token request failed (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result kiroPortalTokenResponse
+	if errUnmarshal := json.Unmarshal(body, &result); errUnmarshal != nil {
+		return nil, fmt.Errorf("failed to decode portal token response: %w", errUnmarshal)
+	}
+	if strings.TrimSpace(result.AccessToken) == "" || strings.TrimSpace(result.RefreshToken) == "" || result.ExpiresIn <= 0 {
+		return nil, fmt.Errorf("portal token response missing required fields")
+	}
+	return &result, nil
+}
+
+func (h *Handler) portalHTTPClient() *http.Client {
+	if h != nil && h.cfg != nil {
+		return util.SetProxy(&h.cfg.SDKConfig, &http.Client{Timeout: 30 * time.Second})
+	}
+	return &http.Client{Timeout: 30 * time.Second}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func (h *Handler) RequestKiroAWSAuthCodeToken(c *gin.Context) {
