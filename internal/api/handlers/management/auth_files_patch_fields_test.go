@@ -162,3 +162,53 @@ func TestPatchAuthFileFields_HeadersEmptyMapIsNoop(t *testing.T) {
 		t.Fatalf("metadata.headers.X-Kee = %#v, want %q", got, "1")
 	}
 }
+
+func TestPatchAuthFileFields_WindsurfNativeFields(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "")
+	gin.SetMode(gin.TestMode)
+
+	store := &memoryAuthStore{}
+	manager := coreauth.NewManager(store, nil, nil)
+	record := &coreauth.Auth{
+		ID:         "windsurf.json",
+		FileName:   "windsurf.json",
+		Provider:   "windsurf",
+		Attributes: map[string]string{"path": "/tmp/windsurf.json"},
+		Metadata:   map[string]any{"type": "windsurf"},
+	}
+	if _, errRegister := manager.Register(context.Background(), record); errRegister != nil {
+		t.Fatalf("failed to register auth record: %v", errRegister)
+	}
+
+	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: t.TempDir()}, manager)
+	body := `{"name":"windsurf.json","api_key":"key","ls_binary_path":"/opt/windsurf/language_server","ls_data_dir":"/data","workspace_dir":"/workspace","ls_max_instances":"10","transport":"native"}`
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	req := httptest.NewRequest(http.MethodPatch, "/v0/management/auth-files/fields", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+	h.PatchAuthFileFields(ctx)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d with body %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	updated, ok := manager.GetByID("windsurf.json")
+	if !ok || updated == nil {
+		t.Fatalf("expected auth record to exist after patch")
+	}
+	for key, want := range map[string]string{
+		"api_key":          "key",
+		"ls_binary_path":   "/opt/windsurf/language_server",
+		"ls_data_dir":      "/data",
+		"workspace_dir":    "/workspace",
+		"ls_max_instances": "10",
+		"transport":        "native",
+	} {
+		if got := updated.Attributes[key]; got != want {
+			t.Fatalf("attributes[%s] = %q, want %q", key, got, want)
+		}
+		if got, _ := updated.Metadata[key].(string); got != want {
+			t.Fatalf("metadata[%s] = %q, want %q", key, got, want)
+		}
+	}
+}

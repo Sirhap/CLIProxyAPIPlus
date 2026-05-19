@@ -166,6 +166,55 @@ func TestFileSynthesizer_Synthesize_GeminiProviderMapping(t *testing.T) {
 	}
 }
 
+func TestFileSynthesizer_Synthesize_WindsurfAttributes(t *testing.T) {
+	tempDir := t.TempDir()
+
+	authData := map[string]any{
+		"type":             "windsurf",
+		"email":            "windsurf@example.com",
+		"transport":        "sidecar",
+		"base_url":         "http://127.0.0.1:3003/v1",
+		"api_key":          "local-key",
+		"auth_token":       "windsurf-token",
+		"api_server_url":   "https://server.self-serve.windsurf.com",
+		"ls_binary_path":   "/opt/windsurf/language_server_linux_x64",
+		"ls_data_dir":      "/opt/windsurf/data",
+		"workspace_dir":    "/tmp/windsurf-workspaces",
+		"ls_max_instances": 10,
+	}
+	data, _ := json.Marshal(authData)
+	if err := os.WriteFile(filepath.Join(tempDir, "windsurf-auth.json"), data, 0644); err != nil {
+		t.Fatalf("failed to write auth file: %v", err)
+	}
+
+	synth := NewFileSynthesizer()
+	ctx := &SynthesisContext{
+		Config:      &config.Config{},
+		AuthDir:     tempDir,
+		Now:         time.Now(),
+		IDGenerator: NewStableIDGenerator(),
+	}
+
+	auths, err := synth.Synthesize(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(auths) != 1 {
+		t.Fatalf("expected 1 auth, got %d", len(auths))
+	}
+	if auths[0].Provider != "windsurf" {
+		t.Fatalf("provider = %q, want windsurf", auths[0].Provider)
+	}
+	for _, key := range []string{"transport", "base_url", "api_key", "auth_token", "api_server_url", "ls_binary_path", "ls_data_dir", "workspace_dir", "ls_max_instances"} {
+		if auths[0].Attributes[key] == "" {
+			t.Fatalf("expected windsurf attribute %s to be copied", key)
+		}
+	}
+	if got := auths[0].Attributes["ls_max_instances"]; got != "10" {
+		t.Fatalf("ls_max_instances attr = %q, want 10", got)
+	}
+}
+
 func TestFileSynthesizer_Synthesize_SkipsInvalidFiles(t *testing.T) {
 	tempDir := t.TempDir()
 

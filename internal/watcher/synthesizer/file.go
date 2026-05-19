@@ -169,6 +169,19 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []
 			}
 		}
 	}
+	if provider == "windsurf" {
+		copyStringMetadataToAttr(a, metadata,
+			"transport",
+			"base_url",
+			"api_key",
+			"auth_token",
+			"api_server_url",
+			"ls_binary_path",
+			"ls_data_dir",
+			"workspace_dir",
+			"ls_max_instances",
+		)
+	}
 	if provider == "gemini-cli" {
 		if virtuals := SynthesizeGeminiVirtualAuths(a, metadata, now); len(virtuals) > 0 {
 			for _, v := range virtuals {
@@ -181,6 +194,43 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) []
 		}
 	}
 	return []*coreauth.Auth{a}
+}
+
+func copyStringMetadataToAttr(auth *coreauth.Auth, metadata map[string]any, keys ...string) {
+	if auth == nil || metadata == nil {
+		return
+	}
+	if auth.Attributes == nil {
+		auth.Attributes = make(map[string]string)
+	}
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if trimmed := metadataValueString(metadata[key]); trimmed != "" {
+			auth.Attributes[key] = trimmed
+		}
+	}
+}
+
+func metadataValueString(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case json.Number:
+		return strings.TrimSpace(v.String())
+	case float64:
+		if v == float64(int64(v)) {
+			return strconv.FormatInt(int64(v), 10)
+		}
+		return strings.TrimSpace(fmt.Sprintf("%v", v))
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	default:
+		return ""
+	}
 }
 
 // SynthesizeGeminiVirtualAuths creates virtual Auth entries for multi-project Gemini credentials.

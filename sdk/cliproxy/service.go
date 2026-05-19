@@ -479,6 +479,8 @@ func (s *Service) ensureExecutorsForAuthWithMode(a *coreauth.Auth, forceReplace 
 		s.coreManager.RegisterExecutor(executor.NewCodeBuddyExecutor(s.cfg))
 	case "gitlab":
 		s.coreManager.RegisterExecutor(executor.NewGitLabExecutor(s.cfg))
+	case "windsurf":
+		s.coreManager.RegisterExecutor(executor.NewWindsurfExecutor(s.cfg))
 	default:
 		providerKey := strings.ToLower(strings.TrimSpace(a.Provider))
 		if providerKey == "" {
@@ -635,6 +637,7 @@ func (s *Service) registerHomeExecutors() {
 	s.coreManager.RegisterExecutor(executor.NewAIStudioExecutor(s.cfg, "", s.wsGateway))
 	s.coreManager.RegisterExecutor(executor.NewAntigravityExecutor(s.cfg))
 	s.coreManager.RegisterExecutor(executor.NewKimiExecutor(s.cfg))
+	s.coreManager.RegisterExecutor(executor.NewWindsurfExecutor(s.cfg))
 	s.coreManager.RegisterExecutor(executor.NewOpenAICompatExecutor("openai-compatibility", s.cfg))
 }
 
@@ -1233,6 +1236,9 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 		models = applyExcludedModels(models, excluded)
 	case "codebuddy":
 		models = registry.GetCodeBuddyModels()
+		models = applyExcludedModels(models, excluded)
+	case "windsurf":
+		models = registry.GetWindsurfModels()
 		models = applyExcludedModels(models, excluded)
 	default:
 		// Handle OpenAI-compatibility providers by name using config

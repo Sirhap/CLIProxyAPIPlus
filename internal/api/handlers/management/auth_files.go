@@ -1161,7 +1161,7 @@ func (h *Handler) PatchAuthFileStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "disabled": *req.Disabled})
 }
 
-// PatchAuthFileFields updates editable fields (prefix, proxy_url, headers, priority, note) of an auth file.
+// PatchAuthFileFields updates editable fields of an auth file.
 func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 	if h.authManager == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
@@ -1175,6 +1175,16 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 		Headers  map[string]string `json:"headers"`
 		Priority *int              `json:"priority"`
 		Note     *string           `json:"note"`
+		// Windsurf native provider fields.
+		Transport      *string `json:"transport"`
+		BaseURL        *string `json:"base_url"`
+		APIKey         *string `json:"api_key"`
+		AuthToken      *string `json:"auth_token"`
+		APIServerURL   *string `json:"api_server_url"`
+		LSBinaryPath   *string `json:"ls_binary_path"`
+		LSDataDir      *string `json:"ls_data_dir"`
+		WorkspaceDir   *string `json:"workspace_dir"`
+		LSMaxInstances *string `json:"ls_max_instances"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -1340,6 +1350,37 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 		}
 		changed = true
 	}
+	windsurfFields := map[string]*string{
+		"transport":        req.Transport,
+		"base_url":         req.BaseURL,
+		"api_key":          req.APIKey,
+		"auth_token":       req.AuthToken,
+		"api_server_url":   req.APIServerURL,
+		"ls_binary_path":   req.LSBinaryPath,
+		"ls_data_dir":      req.LSDataDir,
+		"workspace_dir":    req.WorkspaceDir,
+		"ls_max_instances": req.LSMaxInstances,
+	}
+	for key, valuePtr := range windsurfFields {
+		if valuePtr == nil {
+			continue
+		}
+		if targetAuth.Metadata == nil {
+			targetAuth.Metadata = make(map[string]any)
+		}
+		if targetAuth.Attributes == nil {
+			targetAuth.Attributes = make(map[string]string)
+		}
+		value := strings.TrimSpace(*valuePtr)
+		if value == "" {
+			delete(targetAuth.Metadata, key)
+			delete(targetAuth.Attributes, key)
+		} else {
+			targetAuth.Metadata[key] = value
+			targetAuth.Attributes[key] = value
+		}
+		changed = true
+	}
 
 	if !changed {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no fields to update"})
@@ -1354,6 +1395,95 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// RefreshAuthFileQuota clears local quota cooldown state for a credential.
+func (h *Handler) RefreshAuthFileQuota(c *gin.Context) {
+	if h.authManager == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "core auth manager unavailable"})
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+
+	var targetAuth *coreauth.Auth
+	if auth, ok := h.authManager.GetByID(name); ok {
+		targetAuth = auth
+	} else {
+		auths := h.authManager.List()
+		for _, auth := range auths {
+			if auth.FileName == name {
+				targetAuth = auth
+				break
+			}
+		}
+	}
+
+	if targetAuth == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "auth file not found"})
+		return
+	}
+
+	targetAuth.Quota = coreauth.QuotaState{}
+	targetAuth.NextRetryAfter = time.Time{}
+	if strings.Contains(strings.ToLower(strings.TrimSpace(targetAuth.StatusMessage)), "quota") {
+		targetAuth.StatusMessage = ""
+		targetAuth.Unavailable = false
+	}
+
+	clearedModels := 0
+	for modelID, state := range targetAuth.ModelStates {
+		if state == nil {
+			continue
+		}
+		if state.Quota.Exceeded || state.Quota.Reason != "" || !state.Quota.NextRecoverAt.IsZero() || state.Quota.BackoffLevel != 0 {
+			state.Quota = coreauth.QuotaState{}
+			state.NextRetryAfter = time.Time{}
+			if strings.Contains(strings.ToLower(strings.TrimSpace(state.StatusMessage)), "quota") {
+				state.StatusMessage = ""
+				state.Unavailable = false
+			}
+			clearedModels++
+		}
+		if modelID != "" {
+			registry.GetGlobalRegistry().ClearModelQuotaExceeded(targetAuth.ID, modelID)
+		}
+	}
+	for _, model := range registry.GetGlobalRegistry().GetModelsForClient(targetAuth.ID) {
+		if model != nil && model.ID != "" {
+			registry.GetGlobalRegistry().ClearModelQuotaExceeded(targetAuth.ID, model.ID)
+		}
+	}
+
+	targetAuth.UpdatedAt = time.Now()
+	updated, err := h.authManager.Update(c.Request.Context(), targetAuth)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to refresh auth quota state"})
+		return
+	}
+	if updated != nil {
+		targetAuth = updated
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":         "ok",
+		"name":           name,
+		"id":             targetAuth.ID,
+		"provider":       targetAuth.Provider,
+		"cleared_models": clearedModels,
+	})
 }
 
 func (h *Handler) disableAuth(ctx context.Context, id string) {

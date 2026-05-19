@@ -8,5 +8,7 @@ func (s *Server) registerPlusManagementRoutes(mgmt *gin.RouterGroup) {
 	mgmt.GET("/kiro-portal-auth-url", s.mgmt.RequestKiroPortalToken)
 	mgmt.GET("/kiro-aws-authcode-auth-url", s.mgmt.RequestKiroAWSAuthCodeToken)
 	mgmt.GET("/kiro-idc-auth-url", s.mgmt.RequestKiroIDCToken)
+	mgmt.POST("/windsurf-auth-url", s.mgmt.RequestWindsurfToken)
+	mgmt.POST("/windsurf-login", s.mgmt.RequestWindsurfToken)
 	mgmt.POST("/kiro-import", s.mgmt.ImportKiroToken)
 }

@@ -223,6 +223,7 @@ func cloneModelInfos(models []*ModelInfo) []*ModelInfo {
 //   - codex
 //   - kimi
 //   - antigravity
+//   - windsurf
 //   - xai
 func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 	key := strings.ToLower(strings.TrimSpace(channel))
@@ -251,6 +252,8 @@ func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 		return GetAmazonQModels()
 	case "antigravity":
 		return GetAntigravityModels()
+	case "windsurf":
+		return GetWindsurfModels()
 	case "xai", "x-ai", "grok":
 		return GetXAIModels()
 	default:
@@ -287,6 +290,7 @@ func LookupStaticModelInfo(modelID string) *ModelInfo {
 		data.CodexPro,
 		data.Kimi,
 		data.Antigravity,
+		GetWindsurfModels(),
 		data.XAI,
 	}
 	for _, models := range allModels {
