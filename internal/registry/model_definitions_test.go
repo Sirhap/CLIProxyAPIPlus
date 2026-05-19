@@ -33,6 +33,19 @@ func TestCodexStaticModelsIncludeGPT55(t *testing.T) {
 	assertGPT55ModelInfo(t, "lookup", model)
 }
 
+func TestKiroStaticModelsAreDynamic(t *testing.T) {
+	// Kiro model discovery is dynamic in sdk/cliproxy/service.go. Keep the
+	// static registry empty but non-nil so management callers still recognize
+	// the channel while newly discovered models flow through without code edits.
+	models := GetKiroModels()
+	if models == nil {
+		t.Fatal("GetKiroModels must return a non-nil slice so kiro stays a recognized channel")
+	}
+	if len(models) != 0 {
+		t.Fatalf("GetKiroModels should be empty (dynamic discovery only), got %d entries", len(models))
+	}
+}
+
 func TestWithXAIBuiltinsAddsVideoModel(t *testing.T) {
 	models := WithXAIBuiltins(nil)
 	found := false
@@ -46,6 +59,42 @@ func TestWithXAIBuiltinsAddsVideoModel(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected %s builtin model", xaiBuiltinVideoModelID)
+	}
+}
+
+func TestValidateModelsCatalogAllowsMissingSections(t *testing.T) {
+	data := validTestModelsCatalog()
+	data.XAI = nil
+
+	if err := validateModelsCatalog(data); err != nil {
+		t.Fatalf("validateModelsCatalog() error = %v", err)
+	}
+}
+
+func TestValidateModelsCatalogRejectsInvalidDefinitions(t *testing.T) {
+	data := validTestModelsCatalog()
+	data.Claude = []*ModelInfo{{ID: ""}}
+
+	if err := validateModelsCatalog(data); err == nil {
+		t.Fatal("expected invalid model definition error")
+	}
+}
+
+func validTestModelsCatalog() *staticModelsJSON {
+	models := []*ModelInfo{{ID: "test-model"}}
+	return &staticModelsJSON{
+		Claude:      models,
+		Gemini:      models,
+		Vertex:      models,
+		GeminiCLI:   models,
+		AIStudio:    models,
+		CodexFree:   models,
+		CodexTeam:   models,
+		CodexPlus:   models,
+		CodexPro:    models,
+		Kimi:        models,
+		Antigravity: models,
+		XAI:         models,
 	}
 }
 

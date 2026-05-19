@@ -130,6 +130,7 @@ func newDefaultAuthManager() *sdkAuth.Manager {
 		sdkAuth.NewCodexAuthenticator(),
 		sdkAuth.NewClaudeAuthenticator(),
 		sdkAuth.NewXAIAuthenticator(),
+		sdkAuth.NewGitLabAuthenticator(),
 	)
 }
 
@@ -466,6 +467,18 @@ func (s *Service) ensureExecutorsForAuthWithMode(a *coreauth.Auth, forceReplace 
 		s.coreManager.RegisterExecutor(executor.NewKimiExecutor(s.cfg))
 	case "xai":
 		s.coreManager.RegisterExecutor(executor.NewXAIExecutor(s.cfg))
+	case "kiro":
+		s.coreManager.RegisterExecutor(executor.NewKiroExecutor(s.cfg))
+	case "kilo":
+		s.coreManager.RegisterExecutor(executor.NewKiloExecutor(s.cfg))
+	case "cursor":
+		s.coreManager.RegisterExecutor(executor.NewCursorExecutor(s.cfg))
+	case "github-copilot":
+		s.coreManager.RegisterExecutor(executor.NewGitHubCopilotExecutor(s.cfg))
+	case "codebuddy":
+		s.coreManager.RegisterExecutor(executor.NewCodeBuddyExecutor(s.cfg))
+	case "gitlab":
+		s.coreManager.RegisterExecutor(executor.NewGitLabExecutor(s.cfg))
 	default:
 		providerKey := strings.ToLower(strings.TrimSpace(a.Provider))
 		if providerKey == "" {
@@ -1207,9 +1220,7 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 	case "kiro":
 		models = s.fetchKiroModels(a)
 		// Filter out agentic variants when system prompt injection is disabled,
-		// since the agentic prompt is delivered via system prompt injection.
-		// Use the runtime global flag (not config field) to stay consistent
-		// with the translator's actual behavior.
+		// since the agentic prompt is delivered through system prompt injection.
 		if !kirocommon.IsSystemPromptInjectEnabled() {
 			models = filterAgenticVariants(models)
 		}
