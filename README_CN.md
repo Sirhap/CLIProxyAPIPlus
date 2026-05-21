@@ -100,7 +100,7 @@ docker compose up -d
 
 ## 使用量统计
 
-自 v6.10.0 版本以后，上游 CLIProxyAPI 及 [CPAMC](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) 项目不再预置数据统计功能。CLIProxyAPIPlus 会通过自身的使用量日志和维护版 [CPAMC dashboard fork](https://github.com/kaitranntt/Cli-Proxy-API-Management-Center) 保留该工作流，并默认使用这个管理面板发布源。
+自 v6.10.0 版本以后，上游 CLIProxyAPI 及 [CPAMC](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) 项目不再预置数据统计功能。CLIProxyAPIPlus 会通过自身的使用量日志和维护版 [CPAMC dashboard fork](https://github.com/Sirhap/Cli-Proxy-API-Management-Center) 保留该工作流，并默认使用这个管理面板发布源。
 
 如果需要独立的外部使用量服务，请使用以下项目：
 

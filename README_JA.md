@@ -68,7 +68,7 @@ CLIProxyAPIガイド：[https://help.router-for.me/](https://help.router-for.me/
 
 ## 使用量統計
 
-v6.10.0以降、上流のCLIProxyAPIおよび [CPAMC](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) プロジェクトには使用量統計機能がプリセットされなくなりました。CLIProxyAPIPlusでは、使用量ロガーとメンテナンス版の [CPAMC dashboard fork](https://github.com/kaitranntt/Cli-Proxy-API-Management-Center) により、このワークフローを維持し、この管理パネルのリリースをデフォルトで使用します。
+v6.10.0以降、上流のCLIProxyAPIおよび [CPAMC](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) プロジェクトには使用量統計機能がプリセットされなくなりました。CLIProxyAPIPlusでは、使用量ロガーとメンテナンス版の [CPAMC dashboard fork](https://github.com/Sirhap/Cli-Proxy-API-Management-Center) により、このワークフローを維持し、この管理パネルのリリースをデフォルトで使用します。
 
 外部の独立した使用量サービスが必要な場合は、次のプロジェクトをご利用ください：
 
