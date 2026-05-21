@@ -13,8 +13,9 @@ name: docker-image
 #
 # Registries:
 #   - GHCR: ghcr.io/<owner>/cli-proxy-api-plus using built-in GITHUB_TOKEN
-#   - Docker Hub: kaitranntt/cli-proxy-api-plus when DOCKERHUB_TOKEN is
-#     configured (DOCKERHUB_USERNAME is optional; defaults to kaitranntt)
+#   - Docker Hub: <DOCKERHUB_USERNAME>/cli-proxy-api-plus when DOCKERHUB_TOKEN
+#     and DOCKERHUB_USERNAME repository secrets are configured. Override the
+#     repository path with a DOCKERHUB_IMAGE_NAME repository variable if needed.
 
 on:
   workflow_dispatch:
@@ -32,7 +33,7 @@ env:
   APP_NAME: CLIProxyAPI
   GHCR_REGISTRY: ghcr.io
   GHCR_IMAGE_NAME: ${{ github.repository_owner }}/cli-proxy-api-plus
-  DOCKERHUB_IMAGE_NAME: kaitranntt/cli-proxy-api-plus
+  DOCKERHUB_DEFAULT_REPOSITORY: cli-proxy-api-plus
 
 permissions:
   contents: read
@@ -83,18 +84,31 @@ jobs:
         id: dockerhub
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE_NAME }}
+          DOCKERHUB_DEFAULT_REPOSITORY: ${{ env.DOCKERHUB_DEFAULT_REPOSITORY }}
         run: |
           if [ -n "${DOCKERHUB_TOKEN}" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+            if [ -z "${DOCKERHUB_USERNAME}" ]; then
+              echo "::error::DOCKERHUB_TOKEN is configured, but DOCKERHUB_USERNAME is missing."
+              echo "::error::Add a DOCKERHUB_USERNAME repository secret, or remove DOCKERHUB_TOKEN to skip Docker Hub publishing."
+              exit 1
+            fi
+            if [ -z "${DOCKERHUB_IMAGE_NAME}" ]; then
+              DOCKERHUB_IMAGE_NAME="${DOCKERHUB_USERNAME}/${DOCKERHUB_DEFAULT_REPOSITORY}"
+            fi
+            echo "image_name=${DOCKERHUB_IMAGE_NAME}" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "image_name=" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Login to Docker Hub
         if: steps.dockerhub.outputs.enabled == 'true'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME || 'kaitranntt' }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Lowercase image names
@@ -102,7 +116,7 @@ jobs:
         run: |
           GHCR_IMG="${GHCR_REGISTRY}/${GHCR_IMAGE_NAME}"
           GHCR_IMG_LC="$(echo "${GHCR_IMG}" | tr '[:upper:]' '[:lower:]')"
-          DOCKERHUB_IMG_LC="$(echo "${DOCKERHUB_IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
+          DOCKERHUB_IMG_LC="$(echo "${{ steps.dockerhub.outputs.image_name }}" | tr '[:upper:]' '[:lower:]')"
           {
             echo "ghcr_ref=${GHCR_IMG_LC}"
             echo "dockerhub_ref=${DOCKERHUB_IMG_LC}"
@@ -169,7 +183,7 @@ jobs:
               echo "Pull: \`docker pull ${DOCKERHUB_REF}:${VERSION}\`"
             else
               echo
-              echo "Docker Hub skipped: configure \`DOCKERHUB_TOKEN\` to publish \`${DOCKERHUB_REF}\`. Set \`DOCKERHUB_USERNAME\` only if the login account is not \`kaitranntt\`."
+              echo "Docker Hub skipped: configure \`DOCKERHUB_TOKEN\` and \`DOCKERHUB_USERNAME\` repository secrets to publish to Docker Hub."
               echo
               echo "Pull: \`docker pull ${GHCR_REF}:${VERSION}\`"
             fi
