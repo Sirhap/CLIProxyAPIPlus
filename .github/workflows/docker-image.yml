@@ -8,8 +8,8 @@ name: docker-image
 #     GITHUB_TOKEN events do not cascade)
 #   - workflow_dispatch with optional `tag` input
 #
-# Runner: self-hosted `cliproxy` (docker host LXC). QEMU + buildx produce both
-# linux/amd64 and linux/arm64 from a single x64 host.
+# Runner: GitHub-hosted Ubuntu. QEMU + buildx produce both linux/amd64 and
+# linux/arm64 from a single x64 host.
 #
 # Registries:
 #   - GHCR: ghcr.io/<owner>/cli-proxy-api-plus using built-in GITHUB_TOKEN
@@ -45,7 +45,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: [self-hosted, cliproxy]
+    runs-on: ubuntu-latest
     steps:
       - name: Resolve build ref
         id: ref
