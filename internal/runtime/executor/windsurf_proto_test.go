@@ -1,6 +1,11 @@
 package executor
 
-import "testing"
+import (
+	"bytes"
+	"compress/gzip"
+	"encoding/binary"
+	"testing"
+)
 
 func TestWindsurfGRPCExtractFrames(t *testing.T) {
 	first := []byte("one")
@@ -12,6 +17,29 @@ func TestWindsurfGRPCExtractFrames(t *testing.T) {
 	}
 	if len(frames) != 2 || string(frames[0]) != "one" || string(frames[1]) != "two" {
 		t.Fatalf("frames = %#v, want one/two", frames)
+	}
+}
+
+func TestWindsurfGRPCExtractCompressedGzipFrame(t *testing.T) {
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := writer.Write([]byte("compressed payload")); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	frame := make([]byte, 5+compressed.Len())
+	frame[0] = 1
+	binary.BigEndian.PutUint32(frame[1:5], uint32(compressed.Len()))
+	copy(frame[5:], compressed.Bytes())
+
+	frames, err := windsurfExtractGRPCFramesWithEncoding(frame, "gzip")
+	if err != nil {
+		t.Fatalf("extract compressed frame: %v", err)
+	}
+	if len(frames) != 1 || string(frames[0]) != "compressed payload" {
+		t.Fatalf("frames = %#v, want compressed payload", frames)
 	}
 }
 

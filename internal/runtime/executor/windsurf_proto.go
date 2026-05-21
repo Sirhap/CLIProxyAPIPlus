@@ -15,18 +15,18 @@ import (
 const windsurfLanguageServerService = "/exa.language_server_pb.LanguageServerService"
 
 const (
-	windsurfRPCGetUserStatus          = windsurfLanguageServerService + "/GetUserStatus"
-	windsurfRPCRawGetChatMessage      = windsurfLanguageServerService + "/RawGetChatMessage"
-	windsurfRPCInitializePanelState   = windsurfLanguageServerService + "/InitializePanelState"
-	windsurfRPCHeartbeat              = windsurfLanguageServerService + "/Heartbeat"
-	windsurfRPCAddTrackedWorkspace    = windsurfLanguageServerService + "/AddTrackedWorkspace"
-	windsurfRPCUpdateWorkspaceTrust   = windsurfLanguageServerService + "/UpdateWorkspaceTrust"
-	windsurfRPCStartCascade           = windsurfLanguageServerService + "/StartCascade"
-	windsurfRPCSendUserCascadeMessage = windsurfLanguageServerService + "/SendUserCascadeMessage"
-	windsurfRPCGetTrajectory          = windsurfLanguageServerService + "/GetTrajectory"
-	windsurfRPCGetTrajectorySteps     = windsurfLanguageServerService + "/GetTrajectorySteps"
-	windsurfRPCGetGeneratorMetadata   = windsurfLanguageServerService + "/GetGeneratorMetadata"
-	windsurfRPCGetCascadeModelConfigs = windsurfLanguageServerService + "/GetCascadeModelConfigs"
+	windsurfRPCGetUserStatus                  = windsurfLanguageServerService + "/GetUserStatus"
+	windsurfRPCRawGetChatMessage              = windsurfLanguageServerService + "/RawGetChatMessage"
+	windsurfRPCInitializeCascadePanelState    = windsurfLanguageServerService + "/InitializeCascadePanelState"
+	windsurfRPCHeartbeat                      = windsurfLanguageServerService + "/Heartbeat"
+	windsurfRPCAddTrackedWorkspace            = windsurfLanguageServerService + "/AddTrackedWorkspace"
+	windsurfRPCUpdateWorkspaceTrust           = windsurfLanguageServerService + "/UpdateWorkspaceTrust"
+	windsurfRPCStartCascade                   = windsurfLanguageServerService + "/StartCascade"
+	windsurfRPCSendUserCascadeMessage         = windsurfLanguageServerService + "/SendUserCascadeMessage"
+	windsurfRPCGetCascadeTrajectory           = windsurfLanguageServerService + "/GetCascadeTrajectory"
+	windsurfRPCGetCascadeTrajectorySteps      = windsurfLanguageServerService + "/GetCascadeTrajectorySteps"
+	windsurfRPCGetCascadeModelConfigs         = windsurfLanguageServerService + "/GetCascadeModelConfigs"
+	windsurfRPCStreamCascadePanelReactiveData = windsurfLanguageServerService + "/StreamCascadePanelReactiveUpdates"
 )
 
 type windsurfProtoField struct {

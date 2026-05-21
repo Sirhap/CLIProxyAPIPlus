@@ -330,7 +330,7 @@ func (c *WindsurfClient) warmupCascade(ctx context.Context, ls *WindsurfLanguage
 		path    string
 		payload []byte
 	}{
-		{windsurfRPCInitializePanelState, windsurfBuildInitializePanelStateRequest(apiKey, sessionID, true)},
+		{windsurfRPCInitializeCascadePanelState, windsurfBuildInitializePanelStateRequest(apiKey, sessionID, true)},
 		{windsurfRPCAddTrackedWorkspace, windsurfBuildAddTrackedWorkspaceRequest(key)},
 		{windsurfRPCUpdateWorkspaceTrust, windsurfBuildUpdateWorkspaceTrustRequest(apiKey, sessionID, true)},
 		{windsurfRPCHeartbeat, windsurfBuildHeartbeatRequest(apiKey, sessionID)},
@@ -382,7 +382,7 @@ func (c *WindsurfClient) pollCascade(ctx context.Context, run *windsurfCascadeRu
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		stepsResp, err := run.GRPC.Unary(ctx, windsurfRPCGetTrajectorySteps, windsurfBuildGetTrajectoryStepsRequest(run.CascadeID, 0), 30*time.Second)
+		stepsResp, err := run.GRPC.Unary(ctx, windsurfRPCGetCascadeTrajectorySteps, windsurfBuildGetTrajectoryStepsRequest(run.CascadeID, 0), 30*time.Second)
 		if err != nil {
 			closeWindsurfGRPCClient(run.LS.Port)
 			return nil, err
@@ -409,7 +409,7 @@ func (c *WindsurfClient) pollCascade(ctx context.Context, run *windsurfCascadeRu
 			return nil, statusErr{code: http.StatusBadGateway, msg: stepErr}
 		}
 
-		statusResp, err := run.GRPC.Unary(ctx, windsurfRPCGetTrajectory, windsurfBuildGetTrajectoryRequest(run.CascadeID), 15*time.Second)
+		statusResp, err := run.GRPC.Unary(ctx, windsurfRPCGetCascadeTrajectory, windsurfBuildGetTrajectoryRequest(run.CascadeID), 15*time.Second)
 		if err != nil {
 			closeWindsurfGRPCClient(run.LS.Port)
 			return nil, err
@@ -486,6 +486,7 @@ func windsurfCascadePromptFromOpenAI(payload []byte) string {
 	messages := gjson.GetBytes(payload, "messages").Array()
 	var systemParts []string
 	var history []string
+	var plainUserTurns []string
 	for _, msg := range messages {
 		role := msg.Get("role").String()
 		content := windsurfOpenAIContentToString(msg.Get("content"))
@@ -514,11 +515,17 @@ func windsurfCascadePromptFromOpenAI(payload []byte) string {
 		if content == "" {
 			continue
 		}
+		if role == "user" {
+			plainUserTurns = append(plainUserTurns, content)
+		}
 		tag := role
 		if tag == "" {
 			tag = "user"
 		}
 		history = append(history, fmt.Sprintf("<%s>%s</%s>", tag, content, tag))
+	}
+	if len(systemParts) == 0 && len(history) == 1 && len(plainUserTurns) == 1 {
+		return plainUserTurns[0]
 	}
 	var b strings.Builder
 	if len(systemParts) > 0 {
