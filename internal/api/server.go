@@ -758,6 +758,7 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.PATCH("/auth-files/status", s.mgmt.PatchAuthFileStatus)
 		mgmt.PATCH("/auth-files/fields", s.mgmt.PatchAuthFileFields)
 		mgmt.POST("/auth-files/quota-refresh", s.mgmt.RefreshAuthFileQuota)
+		mgmt.POST("/auth-files/quota-query", s.mgmt.GetAuthFileQuotaQuery)
 		mgmt.POST("/auth-files/windsurf-quota", s.mgmt.GetWindsurfAuthFileQuota)
 		mgmt.POST("/vertex/import", s.mgmt.ImportVertexCredential)
 

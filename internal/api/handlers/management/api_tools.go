@@ -1035,62 +1035,9 @@ func (h *Handler) GetCopilotQuota(c *gin.Context) {
 		return
 	}
 
-	token, tokenErr := h.resolveTokenForAuth(c.Request.Context(), auth)
-	if tokenErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to refresh copilot token"})
-		return
-	}
-	if token == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "copilot token not found"})
-		return
-	}
-
-	apiURL := "https://api.github.com/copilot_internal/user"
-	req, errNewRequest := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, apiURL, nil)
-	if errNewRequest != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build request"})
-		return
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("User-Agent", "CLIProxyAPIPlus")
-	req.Header.Set("Accept", "application/json")
-
-	httpClient := &http.Client{
-		Timeout:   defaultAPICallTimeout,
-		Transport: h.apiCallTransport(auth),
-	}
-
-	resp, errDo := httpClient.Do(req)
-	if errDo != nil {
-		log.WithError(errDo).Debug("copilot quota request failed")
-		c.JSON(http.StatusBadGateway, gin.H{"error": "request failed"})
-		return
-	}
-	defer func() {
-		if errClose := resp.Body.Close(); errClose != nil {
-			log.Errorf("response body close error: %v", errClose)
-		}
-	}()
-
-	respBody, errReadAll := io.ReadAll(resp.Body)
-	if errReadAll != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to read response"})
-		return
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error":       "github api request failed",
-			"status_code": resp.StatusCode,
-			"body":        string(respBody),
-		})
-		return
-	}
-
-	var usage CopilotUsageResponse
-	if errUnmarshal := json.Unmarshal(respBody, &usage); errUnmarshal != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse response"})
+	usage, errUsage := h.fetchCopilotUsage(c.Request.Context(), auth)
+	if errUsage != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": errUsage.Error()})
 		return
 	}
 
