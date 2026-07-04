@@ -14,7 +14,7 @@ import (
 )
 
 func TestStartKiroAuthCodeCallbackForwarderFallsBackWhenPreferredPortBusy(t *testing.T) {
-	busyListener, err := net.Listen("tcp", "0.0.0.0:0")
+	busyListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen busy port: %v", err)
 	}

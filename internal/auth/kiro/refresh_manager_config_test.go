@@ -24,7 +24,9 @@ func TestInitSystemPromptInjectConfig_AppliesAndResets(t *testing.T) {
 
 	enabled := true
 	InitSystemPromptInjectConfig(&config.Config{
-		KiroSystemPromptInjectEnable: &enabled,
+		PlusConfig: config.PlusConfig{
+			KiroSystemPromptInjectEnable: &enabled,
+		},
 	})
 	if !kirocommon.IsSystemPromptInjectEnabled() {
 		t.Fatal("expected system prompt injection to be enabled")
@@ -42,7 +44,9 @@ func TestInitTruncationDetectorConfig_AppliesAndResets(t *testing.T) {
 
 	enabled := true
 	InitTruncationDetectorConfig(&config.Config{
-		KiroTruncationDetectorEnable: &enabled,
+		PlusConfig: config.PlusConfig{
+			KiroTruncationDetectorEnable: &enabled,
+		},
 	})
 	if !kirocommon.IsTruncationDetectorEnabled() {
 		t.Fatal("expected truncation detector to be enabled")
@@ -60,7 +64,9 @@ func TestInitExtractThinkingTagConfig_AppliesAndResets(t *testing.T) {
 
 	enabled := true
 	InitExtractThinkingTagConfig(&config.Config{
-		KiroExtractThinkingTagEnable: &enabled,
+		PlusConfig: config.PlusConfig{
+			KiroExtractThinkingTagEnable: &enabled,
+		},
 	})
 	if !kirocommon.IsExtractThinkingTagEnabled() {
 		t.Fatal("expected extract thinking tag to be enabled")
@@ -78,10 +84,12 @@ func TestInitRateLimiterConfig_AppliesAndResets(t *testing.T) {
 
 	enabled := true
 	InitRateLimiterConfig(&config.Config{
-		KiroRateLimit: &config.KiroRateLimitConfig{
-			Enabled:          &enabled,
-			MinTokenInterval: "5s",
-			MaxTokenInterval: "7s",
+		PlusConfig: config.PlusConfig{
+			KiroRateLimit: &config.KiroRateLimitConfig{
+				Enabled:          &enabled,
+				MinTokenInterval: "5s",
+				MaxTokenInterval: "7s",
+			},
 		},
 	})
 

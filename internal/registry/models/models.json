@@ -1810,70 +1810,6 @@
       }
     }
   ],
-  "kimi": [
-    {
-      "id": "kimi-k2",
-      "object": "model",
-      "created": 1752192000,
-      "owned_by": "moonshot",
-      "type": "kimi",
-      "display_name": "Kimi K2",
-      "description": "Kimi K2 - Moonshot AI's flagship coding model",
-      "context_length": 131072,
-      "max_completion_tokens": 32768
-    },
-    {
-      "id": "kimi-k2-thinking",
-      "object": "model",
-      "created": 1762387200,
-      "owned_by": "moonshot",
-      "type": "kimi",
-      "display_name": "Kimi K2 Thinking",
-      "description": "Kimi K2 Thinking - Extended reasoning model",
-      "context_length": 131072,
-      "max_completion_tokens": 32768,
-      "thinking": {
-        "min": 1024,
-        "max": 32000,
-        "zero_allowed": true,
-        "dynamic_allowed": true
-      }
-    },
-    {
-      "id": "kimi-k2.5",
-      "object": "model",
-      "created": 1769472000,
-      "owned_by": "moonshot",
-      "type": "kimi",
-      "display_name": "Kimi K2.5",
-      "description": "Kimi K2.5 - Latest Moonshot AI coding model with improved capabilities",
-      "context_length": 131072,
-      "max_completion_tokens": 32768,
-      "thinking": {
-        "min": 1024,
-        "max": 32000,
-        "zero_allowed": true,
-        "dynamic_allowed": true
-      }
-    },
-    {
-      "id": "kimi-k2.6",
-      "object": "model",
-      "created": 1776729600,
-      "owned_by": "moonshot",
-      "type": "kimi",
-      "display_name": "Kimi K2.6",
-      "description": "Kimi K2.6 - Latest Moonshot AI coding model with improved capabilities",
-      "context_length": 262144,
-      "max_completion_tokens": 65536,
-      "thinking": {
-        "min": 1024,
-        "max": 32000,
-        "zero_allowed": true,
-        "dynamic_allowed": true
-      }
-    }
-  ],
   "antigravity": [
     {
       "id": "claude-opus-4-6-thinking",
@@ -2063,6 +1999,70 @@
           "medium",
           "high"
         ]
+      }
+    }
+  ],
+  "kimi": [
+    {
+      "id": "kimi-k2",
+      "object": "model",
+      "created": 1752192000,
+      "owned_by": "moonshot",
+      "type": "kimi",
+      "display_name": "Kimi K2",
+      "description": "Kimi K2 - Moonshot AI's flagship coding model",
+      "context_length": 131072,
+      "max_completion_tokens": 32768
+    },
+    {
+      "id": "kimi-k2-thinking",
+      "object": "model",
+      "created": 1762387200,
+      "owned_by": "moonshot",
+      "type": "kimi",
+      "display_name": "Kimi K2 Thinking",
+      "description": "Kimi K2 Thinking - Extended reasoning model",
+      "context_length": 131072,
+      "max_completion_tokens": 32768,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      }
+    },
+    {
+      "id": "kimi-k2.5",
+      "object": "model",
+      "created": 1769472000,
+      "owned_by": "moonshot",
+      "type": "kimi",
+      "display_name": "Kimi K2.5",
+      "description": "Kimi K2.5 - Latest Moonshot AI coding model with improved capabilities",
+      "context_length": 131072,
+      "max_completion_tokens": 32768,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      }
+    },
+    {
+      "id": "kimi-k2.6",
+      "object": "model",
+      "created": 1776729600,
+      "owned_by": "moonshot",
+      "type": "kimi",
+      "display_name": "Kimi K2.6",
+      "description": "Kimi K2.6 - Latest Moonshot AI coding model with improved capabilities",
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "min": 1024,
+        "max": 32000,
+        "zero_allowed": true,
+        "dynamic_allowed": true
       }
     }
   ],

@@ -463,25 +463,15 @@ func (s *Service) ensureExecutorsForAuthWithMode(a *coreauth.Auth, forceReplace 
 		s.coreManager.RegisterExecutor(executor.NewAntigravityExecutor(s.cfg))
 	case "claude":
 		s.coreManager.RegisterExecutor(executor.NewClaudeExecutor(s.cfg))
-	case "kimi":
-		s.coreManager.RegisterExecutor(executor.NewKimiExecutor(s.cfg))
-	case "xai":
-		s.coreManager.RegisterExecutor(executor.NewXAIExecutor(s.cfg))
 	case "kiro":
 		s.coreManager.RegisterExecutor(executor.NewKiroExecutor(s.cfg))
-	case "kilo":
-		s.coreManager.RegisterExecutor(executor.NewKiloExecutor(s.cfg))
-	case "cursor":
-		s.coreManager.RegisterExecutor(executor.NewCursorExecutor(s.cfg))
 	case "github-copilot":
 		s.coreManager.RegisterExecutor(executor.NewGitHubCopilotExecutor(s.cfg))
-	case "codebuddy":
-		s.coreManager.RegisterExecutor(executor.NewCodeBuddyExecutor(s.cfg))
-	case "gitlab":
-		s.coreManager.RegisterExecutor(executor.NewGitLabExecutor(s.cfg))
-	case "windsurf":
-		s.coreManager.RegisterExecutor(executor.NewWindsurfExecutor(s.cfg))
 	default:
+		if newPlusExecutor, isPlus := plusExecutorConstructors[strings.ToLower(strings.TrimSpace(a.Provider))]; isPlus {
+			s.coreManager.RegisterExecutor(newPlusExecutor(s.cfg))
+			return
+		}
 		providerKey := strings.ToLower(strings.TrimSpace(a.Provider))
 		if providerKey == "" {
 			providerKey = "openai-compatibility"
@@ -1204,17 +1194,6 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 			}
 		}
 		models = applyExcludedModels(models, excluded)
-	case "kimi":
-		models = registry.GetKimiModels()
-		models = applyExcludedModels(models, excluded)
-	case "xai":
-		models = registry.GetXAIModels()
-		models = applyExcludedModels(models, excluded)
-	case "cursor":
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		models = executor.FetchCursorModels(ctx, a, s.cfg)
-		models = applyExcludedModels(models, excluded)
 	case "github-copilot":
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -1228,19 +1207,12 @@ func (s *Service) registerModelsForAuth(a *coreauth.Auth) {
 			models = filterAgenticVariants(models)
 		}
 		models = applyExcludedModels(models, excluded)
-	case "kilo":
-		models = executor.FetchKiloModels(context.Background(), a, s.cfg)
-		models = applyExcludedModels(models, excluded)
-	case "gitlab":
-		models = executor.GitLabModelsFromAuth(a)
-		models = applyExcludedModels(models, excluded)
-	case "codebuddy":
-		models = registry.GetCodeBuddyModels()
-		models = applyExcludedModels(models, excluded)
-	case "windsurf":
-		models = registry.GetWindsurfModels()
-		models = applyExcludedModels(models, excluded)
 	default:
+		if resolvePlusModels, isPlus := plusModelResolvers[provider]; isPlus {
+			models = resolvePlusModels(a, s.cfg)
+			models = applyExcludedModels(models, excluded)
+			break
+		}
 		// Handle OpenAI-compatibility providers by name using config
 		if s.cfg != nil {
 			providerKey := provider
